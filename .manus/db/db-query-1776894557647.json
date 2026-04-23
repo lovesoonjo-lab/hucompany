@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `user_settings` ADD `gcsProjectId` varchar(255), ADD `gcsBucketName` varchar(255), ADD `gcsServiceAccountEmail` varchar(320), ADD `gcsPrivateKey` text, ADD `gcsVerifiedAt` timestamp NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user Uws8mz2JK2Vnn3i.cc254cf601fb --database ia6e5rCjFZsj6QRKWugngg --execute ALTER TABLE `user_settings` ADD `gcsProjectId` varchar(255), ADD `gcsBucketName` varchar(255), ADD `gcsServiceAccountEmail` varchar(320), ADD `gcsPrivateKey` text, ADD `gcsVerifiedAt` timestamp NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 2363
+}

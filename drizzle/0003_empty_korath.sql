@@ -1,0 +1,1 @@
+ALTER TABLE `uploads` MODIFY COLUMN `platform` enum('TikTok','Instagram','YouTube','Facebook','Instagram Reels','YouTube Shorts') NOT NULL;

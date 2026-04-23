@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1776892452691,
+      "tag": "0000_exotic_mordo",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1776892628967,
+      "tag": "0001_numerous_vivisector",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1776893468253,
+      "tag": "0002_orange_zarda",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1776894215807,
+      "tag": "0003_empty_korath",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1776894543418,
+      "tag": "0004_closed_zombie",
+      "breakpoints": true
+    }
+  ]
+}
