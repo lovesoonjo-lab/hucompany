@@ -19,13 +19,11 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { getLoginUrl, isLoginConfigured } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
 import { Film, FolderOpen, KeyRound, LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
-import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "대시보드", path: "/" },
@@ -56,49 +54,6 @@ export default function DashboardLayout({
 
   if (loading) {
     return <DashboardLayoutSkeleton />
-  }
-
-  if (!user) {
-    const canLogin = isLoginConfigured();
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-linen">
-        <div className="flex flex-col items-center gap-10 p-12 max-w-lg w-full">
-          <div className="flex flex-col items-center gap-4 text-center">
-            <div className="flex flex-col items-center leading-tight gap-4">
-              <p className="uppercase tracking-[0.32em] text-3xl text-muted-foreground">
-                HUCOMPANY
-              </p>
-              <p className="font-serif text-[5rem] leading-none tracking-tight whitespace-nowrap">
-                Shopping Shorts
-              </p>
-            </div>
-            <div className="gold-divider w-24 my-2" />
-            <img
-              src="/family-illustration.png"
-              alt="HUCOMPANY family illustration"
-              className="w-full max-w-md rounded-2xl border hairline"
-              draggable={false}
-            />
-          </div>
-          <Button
-            onClick={() => {
-              if (!canLogin) return;
-              window.location.href = getLoginUrl();
-            }}
-            disabled={!canLogin}
-            size="lg"
-            className="w-full shadow-md hover:shadow-lg transition-all"
-          >
-            로그인하고 시작하기
-          </Button>
-          {!canLogin ? (
-            <p className="text-xs text-muted-foreground text-center -mt-6">
-              로그인 설정이 비어 있습니다. `VITE_OAUTH_PORTAL_URL`과 `VITE_APP_ID`를 설정해주세요.
-            </p>
-          ) : null}
-        </div>
-      </div>
-    );
   }
 
   return (
