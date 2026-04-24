@@ -36,6 +36,20 @@
       "when": 1776894543418,
       "tag": "0004_closed_zombie",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1777032657410,
+      "tag": "0005_gray_ink",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1777055197792,
+      "tag": "0006_military_living_mummy",
+      "breakpoints": true
     }
   ]
 }

@@ -236,6 +236,7 @@ describe("settings router", () => {
     const result = await caller.settings.get();
     expect(result).toEqual({
       kreaApiKey: "",
+      youtubeApiKey: "",
       uploadPostApiKey: "",
       gcsProjectId: "",
       gcsBucketName: "",
@@ -247,9 +248,14 @@ describe("settings router", () => {
 
   it("persists Krea and Upload-Post API keys", async () => {
     const caller = appRouter.createCaller(createCtx());
-    await caller.settings.save({ kreaApiKey: "krea-xyz", uploadPostApiKey: "up-abc" });
+    await caller.settings.save({
+      kreaApiKey: "krea-xyz",
+      youtubeApiKey: "yt-123",
+      uploadPostApiKey: "up-abc",
+    });
     const result = await caller.settings.get();
     expect(result.kreaApiKey).toBe("krea-xyz");
+    expect(result.youtubeApiKey).toBe("yt-123");
     expect(result.uploadPostApiKey).toBe("up-abc");
   });
 });

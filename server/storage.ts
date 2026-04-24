@@ -3,6 +3,10 @@
 // Downloads return /manus-storage/{key} paths served via 307 redirect.
 
 import { ENV } from "./_core/env";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+
+const LOCAL_STORAGE_ROOT = path.resolve(process.cwd(), ".local-storage");
 
 function getForgeConfig() {
   const forgeUrl = ENV.forgeApiUrl;
@@ -18,7 +22,7 @@ function getForgeConfig() {
 }
 
 function normalizeKey(relKey: string): string {
-  return relKey.replace(/^\/+/, "");
+  return relKey.replace(/^\/+/, "").replace(/\.\./g, "");
 }
 
 function appendHashSuffix(relKey: string): string {
@@ -33,8 +37,18 @@ export async function storagePut(
   data: Buffer | Uint8Array | string,
   contentType = "application/octet-stream",
 ): Promise<{ key: string; url: string }> {
-  const { forgeUrl, forgeKey } = getForgeConfig();
   const key = appendHashSuffix(normalizeKey(relKey));
+  if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
+    const filePath = path.join(LOCAL_STORAGE_ROOT, key);
+    await mkdir(path.dirname(filePath), { recursive: true });
+    if (typeof data === "string") {
+      await writeFile(filePath, data);
+    } else {
+      await writeFile(filePath, Buffer.from(data));
+    }
+    return { key, url: `/manus-storage/${key}` };
+  }
+  const { forgeUrl, forgeKey } = getForgeConfig();
 
   // 1. Get presigned PUT URL from Forge
   const presignUrl = new URL("v1/storage/presign/put", forgeUrl + "/");
@@ -77,6 +91,10 @@ export async function storageGet(relKey: string): Promise<{ key: string; url: st
 }
 
 export async function storageGetSignedUrl(relKey: string): Promise<string> {
+  if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
+    const key = normalizeKey(relKey);
+    return `/manus-storage/${key}`;
+  }
   const { forgeUrl, forgeKey } = getForgeConfig();
   const key = normalizeKey(relKey);
 

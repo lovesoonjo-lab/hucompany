@@ -1,5 +1,9 @@
 import type { Express } from "express";
 import { ENV } from "./env";
+import path from "node:path";
+import { access } from "node:fs/promises";
+
+const LOCAL_STORAGE_ROOT = path.resolve(process.cwd(), ".local-storage");
 
 export function registerStorageProxy(app: Express) {
   app.get("/manus-storage/*", async (req, res) => {
@@ -10,8 +14,17 @@ export function registerStorageProxy(app: Express) {
     }
 
     if (!ENV.forgeApiUrl || !ENV.forgeApiKey) {
-      res.status(500).send("Storage proxy not configured");
-      return;
+      const safeKey = key.replace(/\.\./g, "").replace(/^\/+/, "");
+      const localPath = path.join(LOCAL_STORAGE_ROOT, safeKey);
+      try {
+        await access(localPath);
+        res.set("Cache-Control", "no-store");
+        res.sendFile(localPath);
+        return;
+      } catch {
+        res.status(404).send("Local storage file not found");
+        return;
+      }
     }
 
     try {

@@ -19,20 +19,33 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/useMobile";
-import { Film, FolderOpen, KeyRound, LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ChartColumnBig, Film, FolderOpen, KeyRound, LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
+import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "대시보드", path: "/" },
+  { icon: ChartColumnBig, label: "영상분석", path: "/video-analysis" },
   { icon: FolderOpen, label: "프로젝트", path: "/projects" },
   { icon: Film, label: "새 프로젝트", path: "/projects/new" },
   { icon: KeyRound, label: "API 설정", path: "/settings" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
+const LOCAL_LOGIN_KEY = "local-login-approved";
 const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 480;
@@ -46,7 +59,14 @@ export default function DashboardLayout({
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
-  const { loading, user } = useAuth();
+  const [localLoginApproved, setLocalLoginApproved] = useState(
+    () => localStorage.getItem(LOCAL_LOGIN_KEY) === "1",
+  );
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+  const [loginId, setLoginId] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const { loading } = useAuth();
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -54,6 +74,108 @@ export default function DashboardLayout({
 
   if (loading) {
     return <DashboardLayoutSkeleton />
+  }
+
+  if (!localLoginApproved) {
+    const submitLocalLogin = () => {
+      if (!loginId.trim() || !loginPassword.trim()) {
+        setLoginError("아이디와 비밀번호를 입력해주세요.");
+        return;
+      }
+      localStorage.setItem(LOCAL_LOGIN_KEY, "1");
+      setLocalLoginApproved(true);
+      setLoginError("");
+      setLoginPassword("");
+      setIsLoginDialogOpen(false);
+    };
+
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-linen">
+        <div className="flex flex-col items-center gap-10 p-12 max-w-lg w-full">
+          <div className="flex flex-col items-center gap-4 text-center">
+            <div className="flex flex-col items-center leading-tight gap-4">
+              <p className="uppercase tracking-[0.32em] text-3xl text-muted-foreground">
+                HUCOMPANY
+              </p>
+              <p className="font-serif text-[5rem] leading-none tracking-tight whitespace-nowrap">
+                Shopping Shorts
+              </p>
+            </div>
+            <div className="gold-divider w-24 my-2" />
+            <img
+              src="/family-illustration.png"
+              alt="HUCOMPANY family illustration"
+              className="w-full max-w-md rounded-2xl border hairline"
+              draggable={false}
+            />
+          </div>
+          <Button
+            onClick={() => {
+              setLoginError("");
+              setIsLoginDialogOpen(true);
+            }}
+            size="lg"
+            className="w-full bg-black text-white shadow-md hover:bg-black/90 hover:text-white transition-all"
+          >
+            로그인하고 시작하기
+          </Button>
+        </div>
+        <Dialog
+          open={isLoginDialogOpen}
+          onOpenChange={open => {
+            setIsLoginDialogOpen(open);
+            if (!open) setLoginError("");
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>로그인</DialogTitle>
+              <DialogDescription>아이디와 비밀번호를 입력해 시작하세요.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="local-login-id">아이디</Label>
+                <Input
+                  id="local-login-id"
+                  value={loginId}
+                  onChange={e => setLoginId(e.target.value)}
+                  placeholder="아이디 입력"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="local-login-password">비밀번호</Label>
+                <Input
+                  id="local-login-password"
+                  type="password"
+                  value={loginPassword}
+                  onChange={e => setLoginPassword(e.target.value)}
+                  placeholder="비밀번호 입력"
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      submitLocalLogin();
+                    }
+                  }}
+                />
+              </div>
+              {loginError ? (
+                <p className="text-sm text-destructive">{loginError}</p>
+              ) : null}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsLoginDialogOpen(false)}>
+                취소
+              </Button>
+              <Button
+                onClick={submitLocalLogin}
+                className="bg-black text-white hover:bg-black/90 hover:text-white"
+              >
+                로그인
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
   }
 
   return (
@@ -80,7 +202,7 @@ function DashboardLayoutContent({
   children,
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
@@ -143,11 +265,11 @@ function DashboardLayoutContent({
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <div className="flex flex-col items-start gap-2 min-w-0">
+                <div className="flex items-center gap-3 min-w-0">
                   <img
-                    src="/manus-storage/hucompany-logo_e92b926d.webp"
+                    src="/family-illustration.png"
                     alt="HUCOMPANY"
-                    className="h-12 w-auto select-none"
+                    className="h-12 w-auto rounded-md border hairline select-none"
                     draggable={false}
                   />
                   <div className="flex flex-col leading-tight min-w-0">
@@ -188,7 +310,11 @@ function DashboardLayoutContent({
 
           <SidebarFooter className="p-2">
             <button
-              onClick={logout}
+              onClick={async () => {
+                localStorage.removeItem(LOCAL_LOGIN_KEY);
+                await logout();
+                window.location.href = "/";
+              }}
               className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-accent/60 transition-colors w-full text-left text-sm text-muted-foreground hover:text-foreground group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Sign out"
             >

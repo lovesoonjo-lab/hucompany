@@ -1,28 +1,33 @@
 import { Check } from "lucide-react";
 import { PIPELINE_STEPS } from "@shared/catalog";
 
-export type PipelineStage = "script" | "prompt" | "image" | "video" | "upload";
+export type PipelineStage = "script" | "image" | "video" | "subtitle" | "upload";
 
 interface PipelineStepperProps {
   current: PipelineStage;
   completed?: Record<PipelineStage, boolean>;
 }
 
-const ORDER: PipelineStage[] = ["script", "prompt", "image", "video", "upload"];
+const ORDER: PipelineStage[] = ["script", "image", "video", "subtitle", "upload"];
 
 export function PipelineStepper({ current, completed = {} as Record<PipelineStage, boolean> }: PipelineStepperProps) {
   const currentIndex = ORDER.indexOf(current);
   return (
     <div className="w-full">
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+      <div className="flex flex-nowrap gap-2">
         {PIPELINE_STEPS.map((step, idx) => {
           const isDone = completed[step.key as PipelineStage] || idx < currentIndex;
           const isActive = idx === currentIndex;
+          const tightenRightSpace = step.id === 2 || step.id === 3 || step.id === 4;
+          const shrinkWidth = step.id === 2 || step.id === 3 || step.id === 4;
+          const isUploadStep = step.id === 5;
           return (
             <div
               key={step.id}
               className={[
-                "relative rounded-lg border p-4 transition-all",
+                "relative rounded-lg border transition-all shrink-0",
+                tightenRightSpace ? "pl-4 pr-2 py-4" : "p-4",
+                shrinkWidth ? "w-[170px]" : isUploadStep ? "w-[290px]" : "w-[240px]",
                 isActive
                   ? "border-primary/40 bg-card shadow-sm"
                   : isDone

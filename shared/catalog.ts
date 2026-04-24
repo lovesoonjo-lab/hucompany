@@ -4,6 +4,7 @@
 export type ImageModelId =
   | "Krea 1"
   | "Nano Banana Pro"
+  | "Nano Banana 2"
   | "Flux"
   | "ChatGPT Image"
   | "Seedream 4"
@@ -36,6 +37,14 @@ export const IMAGE_MODELS: ImageModelSpec[] = [
     pricing: "$0.15/장",
     speed: "보통",
     bestFor: "제품 + 인물 합성",
+  },
+  {
+    id: "Nano Banana 2",
+    label: "Nano Banana 2",
+    description: "최신 나노 바나나 이미지 모델",
+    pricing: "프리미엄",
+    speed: "보통",
+    bestFor: "고품질 이미지 생성",
   },
   {
     id: "Flux",
@@ -149,11 +158,11 @@ export function normalizePlatformId(raw: string): PlatformId | null {
 }
 
 export const PIPELINE_STEPS = [
-  { id: 1, key: "script", title: "대본 입력 & 장면 분리", description: "스크립트를 장면 단위로 자동 분석" },
-  { id: 2, key: "prompt", title: "AI 이미지 프롬프트 생성", description: "Krea AI에 최적화된 영어 프롬프트" },
-  { id: 3, key: "image", title: "Krea AI 이미지 생성", description: "장면별 이미지 생성 및 업스케일" },
-  { id: 4, key: "video", title: "이미지→영상 변환", description: "5~12초 클립으로 영상화" },
-  { id: 5, key: "upload", title: "SNS 멀티 플랫폼 일괄 업로드", description: "TikTok · Instagram · YouTube · Facebook" },
+  { id: 1, key: "script", title: "대본 입력 & 장면 분리", description: "" },
+  { id: 2, key: "image", title: "이미지 생성", description: "" },
+  { id: 3, key: "video", title: "영상 변환", description: "" },
+  { id: 4, key: "subtitle", title: "오디오 / 자막 생성", description: "" },
+  { id: 5, key: "upload", title: "SNS 멀티 플랫폼 일괄 업로드", description: "" },
 ] as const;
 
 /**

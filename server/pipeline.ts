@@ -30,6 +30,14 @@ export interface SceneAnalysis {
   cameraAngle: string;
 }
 
+type LlmConfig = {
+  apiKey?: string;
+  apiBaseUrl?: string;
+  model?: string;
+  appName?: string;
+  siteUrl?: string;
+};
+
 const SCENE_SCHEMA = {
   type: "object",
   properties: {
@@ -64,29 +72,44 @@ const SCENE_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-export async function analyzeScript(script: string): Promise<SceneAnalysis[]> {
+export async function analyzeScript(script: string, llmConfig?: LlmConfig): Promise<SceneAnalysis[]> {
   if (!script.trim()) return [];
 
-  const response = await invokeLLM({
-    messages: [
-      {
-        role: "system",
-        content: [
-          "너는 쇼핑 숏폼 영상을 위한 장면 분석 전문가다.",
-          "주어진 대본을 자연스러운 장면(Scene) 단위로 분리하고, 각 장면마다",
-          "시각적 요소(인물, 배경, 소품, 제품, 행동), 분위기/톤, 카메라 앵글을 한국어로 추출하라.",
-          "장면 수는 대본 길이에 비례하여 3~8개로 적절히 나누되, 너무 짧게 쪼개지 말 것.",
-          "visualElements의 각 배열은 해당 요소가 없으면 빈 배열로 둔다.",
-          "카메라 앵글은 클로즈업, 미디엄샷, 와이드샷, 오버더숄더, 탑다운 등에서 선택한다.",
-        ].join(" "),
+  let response: Awaited<ReturnType<typeof invokeLLM>>;
+  try {
+    response = await invokeLLM({
+      ...llmConfig,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "너는 쇼핑 숏폼 영상을 위한 장면 분석 전문가다.",
+            "주어진 대본을 자연스러운 장면(Scene) 단위로 분리하고, 각 장면마다",
+            "시각적 요소(인물, 배경, 소품, 제품, 행동), 분위기/톤, 카메라 앵글을 한국어로 추출하라.",
+            "장면 수는 대본 길이에 비례하여 3~8개로 적절히 나누되, 너무 짧게 쪼개지 말 것.",
+            "visualElements의 각 배열은 해당 요소가 없으면 빈 배열로 둔다.",
+            "카메라 앵글은 클로즈업, 미디엄샷, 와이드샷, 오버더숄더, 탑다운 등에서 선택한다.",
+          ].join(" "),
+        },
+        { role: "user", content: script },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "scene_analysis", strict: true, schema: SCENE_SCHEMA },
       },
-      { role: "user", content: script },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: { name: "scene_analysis", strict: true, schema: SCENE_SCHEMA },
-    },
-  });
+    });
+  } catch (err) {
+    console.warn("[analyzeScript] invokeLLM failed, using fallback scene:", err);
+    return [
+      {
+        sceneIndex: 1,
+        scriptExcerpt: script.slice(0, 400),
+        visualElements: { characters: [], backgrounds: [], props: [], products: [], actions: [] },
+        mood: "자연스러운",
+        cameraAngle: "미디엄샷",
+      },
+    ];
+  }
 
   const raw = response.choices[0]?.message?.content;
   const text = typeof raw === "string" ? raw : "";
@@ -118,7 +141,7 @@ export interface PromptGenerationInput {
   hasPersonPhoto: boolean;
 }
 
-export async function generateImagePrompt(input: PromptGenerationInput): Promise<string> {
+export async function generateImagePrompt(input: PromptGenerationInput, llmConfig?: LlmConfig): Promise<string> {
   const { analysis, aspectRatio, hasProductPhoto, hasPersonPhoto } = input;
 
   const userInstruction = [
@@ -136,26 +159,33 @@ export async function generateImagePrompt(input: PromptGenerationInput): Promise
     `Person reference photo available: ${hasPersonPhoto ? "yes" : "no"}`,
   ].join("\n");
 
-  const response = await invokeLLM({
-    messages: [
-      {
-        role: "system",
-        content: [
-          "You are an expert prompt engineer for Krea AI image models.",
-          "Output ONE single English image-generation prompt (no markdown, no quotes, no labels).",
-          "Include vivid description of the person (appearance, outfit, pose, expression),",
-          "the environment (location, lighting, time of day), product interaction",
-          "(holding in hand, using, placed on table), and photography style (photorealistic,",
-          "cinematic lighting, product photography, editorial).",
-          "End with aspect ratio tag, e.g. --ar 9:16.",
-          "When a product reference photo is available, include 'using the product in the attached reference image'.",
-          "When a person reference photo is available, include 'matching the person in the attached reference image'.",
-          "Keep it under 120 words.",
-        ].join(" "),
-      },
-      { role: "user", content: userInstruction },
-    ],
-  });
+  let response: Awaited<ReturnType<typeof invokeLLM>>;
+  try {
+    response = await invokeLLM({
+      ...llmConfig,
+      messages: [
+        {
+          role: "system",
+          content: [
+            "You are an expert prompt engineer for Krea AI image models.",
+            "Output ONE single English image-generation prompt (no markdown, no quotes, no labels).",
+            "Include vivid description of the person (appearance, outfit, pose, expression),",
+            "the environment (location, lighting, time of day), product interaction",
+            "(holding in hand, using, placed on table), and photography style (photorealistic,",
+            "cinematic lighting, product photography, editorial).",
+            "End with aspect ratio tag, e.g. --ar 9:16.",
+            "When a product reference photo is available, include 'using the product in the attached reference image'.",
+            "When a person reference photo is available, include 'matching the person in the attached reference image'.",
+            "Keep it under 120 words.",
+          ].join(" "),
+        },
+        { role: "user", content: userInstruction },
+      ],
+    });
+  } catch (err) {
+    console.warn("[generateImagePrompt] invokeLLM failed, using deterministic fallback:", err);
+    return `${analysis.scriptExcerpt}, photorealistic, cinematic lighting, --ar ${aspectRatio}`;
+  }
 
   const raw = response.choices[0]?.message?.content;
   const text = typeof raw === "string" ? raw.trim() : "";

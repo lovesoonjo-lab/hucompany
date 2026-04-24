@@ -26,6 +26,8 @@ export const userSettings = mysqlTable("user_settings", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().unique(),
   kreaApiKey: text("kreaApiKey"),
+  openRouterApiKey: text("openRouterApiKey"),
+  youtubeApiKey: text("youtubeApiKey"),
   uploadPostApiKey: text("uploadPostApiKey"),
   // --- Google Cloud Storage (GCS) auto-upload configuration ---
   // Stored at the user level. Project-scoped artifacts (reference/, scripts/,
@@ -43,6 +45,40 @@ export const userSettings = mysqlTable("user_settings", {
 
 export type UserSettings = typeof userSettings.$inferSelect;
 export type InsertUserSettings = typeof userSettings.$inferInsert;
+
+export const youtubeChannelTopicEnum = mysqlEnum("youtubeChannelTopic", [
+  "shopping",
+  "news",
+  "info",
+  "psychology",
+  "economics",
+  "beauty",
+  "cooking",
+  "tech",
+  "music",
+  "vlog",
+  "animation",
+  "kids",
+]);
+
+export const youtubeChannels = mysqlTable("youtube_channels", {
+  id: int("id").autoincrement().primaryKey(),
+  youtubeChannelId: varchar("youtubeChannelId", { length: 128 }).notNull().unique(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  thumbnailUrl: text("thumbnailUrl"),
+  country: varchar("country", { length: 8 }).notNull(),
+  topic: youtubeChannelTopicEnum.notNull(),
+  subscriberCount: int("subscriberCount").default(0).notNull(),
+  viewCount: int("viewCount").default(0).notNull(),
+  videoCount: int("videoCount").default(0).notNull(),
+  lastSyncedAt: timestamp("lastSyncedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type YoutubeChannel = typeof youtubeChannels.$inferSelect;
+export type InsertYoutubeChannel = typeof youtubeChannels.$inferInsert;
 
 /**
  * A project (a.k.a. campaign) — groups scenes, assets and uploads.

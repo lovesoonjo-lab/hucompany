@@ -9,11 +9,13 @@ import Projects from "./pages/Projects";
 import NewProject from "./pages/NewProject";
 import ProjectWorkspace from "./pages/ProjectWorkspace";
 import Settings from "./pages/Settings";
+import VideoAnalysis from "./pages/VideoAnalysis";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/video-analysis" component={VideoAnalysis} />
       <Route path="/projects" component={Projects} />
       <Route path="/projects/new" component={NewProject} />
       <Route path="/projects/:id" component={ProjectWorkspace} />

@@ -7,6 +7,8 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { listYoutubeChannelsFromDb } from "../db";
+import { refreshYoutubeChannelStats, syncYoutubeCatalog } from "../youtubeCatalogSync";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -35,6 +37,70 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   // tRPC API
+  app.get("/api/channels", async (req, res) => {
+    try {
+      const country = String(req.query.country ?? "KR").toUpperCase();
+      const topic = String(req.query.topic ?? "shopping");
+      const sortParam = String(req.query.sort ?? "subscribers");
+      const sort =
+        sortParam === "subscribers_asc" || sortParam === "subscribers-low"
+          ? "subscribers_asc"
+          : sortParam === "views" || sortParam === "views_desc"
+            ? "views_desc"
+            : "subscribers_desc";
+      const cursor = req.query.cursor ? Number(req.query.cursor) : undefined;
+      const limit = req.query.limit ? Number(req.query.limit) : 24;
+
+      const result = await listYoutubeChannelsFromDb({
+        country,
+        topic: topic as Parameters<typeof listYoutubeChannelsFromDb>[0]["topic"],
+        sort,
+        cursor,
+        limit,
+      });
+
+      res.json({
+        items: result.items.map(row => ({
+          channelId: row.youtubeChannelId,
+          title: row.title,
+          thumbnails: row.thumbnailUrl,
+          country: row.country,
+          topic: row.topic,
+          subscriberCount: row.subscriberCount,
+          viewCount: row.viewCount,
+          videoCount: row.videoCount,
+          lastSyncedAt: row.lastSyncedAt,
+        })),
+        nextCursor: result.nextCursor,
+      });
+    } catch (error) {
+      res.status(400).json({ message: error instanceof Error ? error.message : "Failed to load channels" });
+    }
+  });
+
+  app.post("/api/admin/sync-channels", async (req, res) => {
+    const token = process.env.ADMIN_SYNC_TOKEN?.trim();
+    const authHeader = req.headers.authorization ?? "";
+    if (token && authHeader !== `Bearer ${token}`) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    const apiKey = process.env.YOUTUBE_API_KEY?.trim();
+    if (!apiKey) {
+      return res.status(400).json({ message: "YOUTUBE_API_KEY is required" });
+    }
+    try {
+      const refreshOnly = req.query.refreshOnly === "1";
+      if (refreshOnly) {
+        const stats = await refreshYoutubeChannelStats({ apiKey, maxChannels: 500 });
+        return res.json({ mode: "refresh-stats", ...stats });
+      }
+      const synced = await syncYoutubeCatalog({ apiKey, maxResultsPerPair: 12 });
+      return res.json({ mode: "full-sync", ...synced });
+    } catch (error) {
+      return res.status(500).json({ message: error instanceof Error ? error.message : "Sync failed" });
+    }
+  });
+
   app.use(
     "/api/trpc",
     createExpressMiddleware({

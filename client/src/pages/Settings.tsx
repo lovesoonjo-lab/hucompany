@@ -17,6 +17,32 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+function compactPrivateKeyForEditor(value: string | null | undefined): string {
+  if (!value) return "";
+  const normalized = value.replace(/\\n/g, "\n").replace(/\r\n/g, "\n").trim();
+  const begin = "-----BEGIN PRIVATE KEY-----";
+  const end = "-----END PRIVATE KEY-----";
+  if (!normalized.includes(begin) || !normalized.includes(end)) return normalized;
+  const body = normalized
+    .replace(begin, "")
+    .replace(end, "")
+    .replace(/\s+/g, "");
+  return `${begin}\n${body}\n${end}`;
+}
+
+function normalizePrivateKeyForApi(value: string): string {
+  const normalized = value.replace(/\\n/g, "\n").replace(/\r\n/g, "\n").trim();
+  const begin = "-----BEGIN PRIVATE KEY-----";
+  const end = "-----END PRIVATE KEY-----";
+  if (!normalized.includes(begin) || !normalized.includes(end)) return normalized;
+  const body = normalized
+    .replace(begin, "")
+    .replace(end, "")
+    .replace(/\s+/g, "");
+  const wrapped = body.match(/.{1,64}/g)?.join("\n") ?? body;
+  return `${begin}\n${wrapped}\n${end}`;
+}
+
 export default function Settings() {
   const settingsQuery = trpc.settings.get.useQuery();
   const utils = trpc.useUtils();
@@ -40,6 +66,8 @@ export default function Settings() {
   });
 
   const [kreaApiKey, setKreaApiKey] = useState("");
+  const [openRouterApiKey, setOpenRouterApiKey] = useState("");
+  const [youtubeApiKey, setYoutubeApiKey] = useState("");
   const [uploadPostApiKey, setUploadPostApiKey] = useState("");
 
   const [gcsProjectId, setGcsProjectId] = useState("");
@@ -51,15 +79,45 @@ export default function Settings() {
     const d = settingsQuery.data;
     if (!d) return;
     setKreaApiKey(d.kreaApiKey ?? "");
+    setOpenRouterApiKey(d.openRouterApiKey ?? "");
+    setYoutubeApiKey(d.youtubeApiKey ?? "");
     setUploadPostApiKey(d.uploadPostApiKey ?? "");
     setGcsProjectId(d.gcsProjectId ?? "");
     setGcsBucketName(d.gcsBucketName ?? "");
     setGcsServiceAccountEmail(d.gcsServiceAccountEmail ?? "");
-    setGcsPrivateKey(d.gcsPrivateKey ?? "");
+    setGcsPrivateKey(compactPrivateKeyForEditor(d.gcsPrivateKey));
   }, [settingsQuery.data]);
 
-  const onSaveKeys = () => {
-    saveMutation.mutate({ kreaApiKey, uploadPostApiKey });
+  const saveKieKey = () => {
+    saveMutation.mutate({ kreaApiKey });
+  };
+
+  const saveUploadPostKey = () => {
+    saveMutation.mutate({ uploadPostApiKey });
+  };
+
+  const saveOpenRouterKey = () => {
+    saveMutation.mutate({ openRouterApiKey });
+  };
+
+  const saveYoutubeKey = () => {
+    saveMutation.mutate({ youtubeApiKey });
+  };
+
+  const saveGcsProjectIdOnly = () => {
+    saveMutation.mutate({ gcsProjectId });
+  };
+
+  const saveGcsBucketNameOnly = () => {
+    saveMutation.mutate({ gcsBucketName });
+  };
+
+  const saveGcsServiceAccountEmailOnly = () => {
+    saveMutation.mutate({ gcsServiceAccountEmail });
+  };
+
+  const saveGcsPrivateKeyOnly = () => {
+    saveMutation.mutate({ gcsPrivateKey: normalizePrivateKeyForApi(gcsPrivateKey) });
   };
 
   const onVerifyGcs = () => {
@@ -71,7 +129,7 @@ export default function Settings() {
       projectId: gcsProjectId,
       bucketName: gcsBucketName,
       serviceAccountEmail: gcsServiceAccountEmail,
-      privateKey: gcsPrivateKey,
+      privateKey: normalizePrivateKeyForApi(gcsPrivateKey),
       persist: true,
     });
   };
@@ -88,7 +146,7 @@ export default function Settings() {
           <h1 className="font-serif text-3xl md:text-4xl mt-1">API 설정</h1>
           <div className="gold-divider w-20 mt-3" />
           <p className="text-sm text-muted-foreground mt-3">
-            Krea AI · Upload-Post · Google Cloud Storage 연동에 사용할 자격 정보를 설정합니다.
+            Kie AI · OpenRouter · YouTube · Upload-Post · Google Cloud Storage 연동에 사용할 자격 정보를 설정합니다.
             모든 값은 사용자 계정 단위로 저장됩니다.
           </p>
         </header>
@@ -101,15 +159,21 @@ export default function Settings() {
                 <KeyRound className="h-4 w-4" />
               </div>
               <div className="flex-1 space-y-2">
-                <Label htmlFor="krea">Krea AI API Key</Label>
-                <Input
-                  id="krea"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="sk-krea-..."
-                  value={kreaApiKey}
-                  onChange={e => setKreaApiKey(e.target.value)}
-                />
+                <Label htmlFor="krea">Kie ai API key</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="krea"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="sk-krea-..."
+                    value={kreaApiKey}
+                    onChange={e => setKreaApiKey(e.target.value)}
+                  />
+                  <Button onClick={saveKieKey} size="sm" disabled={saveMutation.isPending} className="shrink-0">
+                    <Save className="h-4 w-4" />
+                    저장
+                  </Button>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   키 발급:{" "}
                   <a
@@ -132,25 +196,88 @@ export default function Settings() {
               </div>
               <div className="flex-1 space-y-2">
                 <Label htmlFor="up">Upload-Post API Key (선택)</Label>
-                <Input
-                  id="up"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="up-..."
-                  value={uploadPostApiKey}
-                  onChange={e => setUploadPostApiKey(e.target.value)}
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="up"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="up-..."
+                    value={uploadPostApiKey}
+                    onChange={e => setUploadPostApiKey(e.target.value)}
+                  />
+                  <Button onClick={saveUploadPostKey} size="sm" disabled={saveMutation.isPending} className="shrink-0">
+                    <Save className="h-4 w-4" />
+                    저장
+                  </Button>
+                </div>
                 <p className="text-xs text-muted-foreground">
                   TikTok · Instagram · YouTube · Facebook 일괄 업로드에 사용됩니다.
                 </p>
               </div>
             </div>
 
-            <div className="pt-2 flex justify-end">
-              <Button onClick={onSaveKeys} size="lg" disabled={saveMutation.isPending}>
-                <Save className="h-4 w-4" />
-                {saveMutation.isPending ? "저장 중…" : "저장"}
-              </Button>
+            <div className="gold-divider opacity-40" />
+
+            <div className="flex items-start gap-4">
+              <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center">
+                <KeyRound className="h-4 w-4" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="openrouter">OpenRouter API key (openai/gpt-4o-mini)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="openrouter"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="sk-or-v1-..."
+                    value={openRouterApiKey}
+                    onChange={e => setOpenRouterApiKey(e.target.value)}
+                  />
+                  <Button onClick={saveOpenRouterKey} size="sm" disabled={saveMutation.isPending} className="shrink-0">
+                    <Save className="h-4 w-4" />
+                    저장
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  장면 분리/프롬프트 생성 LLM 호출에 사용됩니다. 발급:{" "}
+                  <a
+                    href="https://openrouter.ai/keys"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="underline underline-offset-2"
+                  >
+                    openrouter.ai/keys
+                  </a>
+                </p>
+              </div>
+            </div>
+
+            <div className="gold-divider opacity-40" />
+
+            <div className="flex items-start gap-4">
+              <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center">
+                <KeyRound className="h-4 w-4" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label htmlFor="youtube">YouTube API key</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="youtube"
+                    type="text"
+                    autoComplete="off"
+                    placeholder="AIza..."
+                    value={youtubeApiKey}
+                    onChange={e => setYoutubeApiKey(e.target.value)}
+                  />
+                  <Button onClick={saveYoutubeKey} size="sm" disabled={saveMutation.isPending} className="shrink-0">
+                    <Save className="h-4 w-4" />
+                    저장
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  YouTube Data API 연동에 사용할 키입니다.
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -180,36 +307,54 @@ export default function Settings() {
             <div className="grid gap-5">
               <div className="space-y-2">
                 <Label htmlFor="gcs-project">Project ID</Label>
-                <Input
-                  id="gcs-project"
-                  placeholder="my-gcp-project"
-                  value={gcsProjectId}
-                  onChange={e => setGcsProjectId(e.target.value)}
-                  autoComplete="off"
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="gcs-project"
+                    placeholder="my-gcp-project"
+                    value={gcsProjectId}
+                    onChange={e => setGcsProjectId(e.target.value)}
+                    autoComplete="off"
+                  />
+                  <Button onClick={saveGcsProjectIdOnly} size="sm" disabled={saveMutation.isPending} className="shrink-0">
+                    <Save className="h-4 w-4" />
+                    저장
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="gcs-bucket">Bucket Name</Label>
-                <Input
-                  id="gcs-bucket"
-                  placeholder="my-content-bucket"
-                  value={gcsBucketName}
-                  onChange={e => setGcsBucketName(e.target.value)}
-                  autoComplete="off"
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="gcs-bucket"
+                    placeholder="my-content-bucket"
+                    value={gcsBucketName}
+                    onChange={e => setGcsBucketName(e.target.value)}
+                    autoComplete="off"
+                  />
+                  <Button onClick={saveGcsBucketNameOnly} size="sm" disabled={saveMutation.isPending} className="shrink-0">
+                    <Save className="h-4 w-4" />
+                    저장
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="gcs-email">Service Account Email</Label>
-                <Input
-                  id="gcs-email"
-                  type="email"
-                  placeholder="my-sa@my-gcp-project.iam.gserviceaccount.com"
-                  value={gcsServiceAccountEmail}
-                  onChange={e => setGcsServiceAccountEmail(e.target.value)}
-                  autoComplete="off"
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="gcs-email"
+                    type="email"
+                    placeholder="my-sa@my-gcp-project.iam.gserviceaccount.com"
+                    value={gcsServiceAccountEmail}
+                    onChange={e => setGcsServiceAccountEmail(e.target.value)}
+                    autoComplete="off"
+                  />
+                  <Button onClick={saveGcsServiceAccountEmailOnly} size="sm" disabled={saveMutation.isPending} className="shrink-0">
+                    <Save className="h-4 w-4" />
+                    저장
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -217,16 +362,22 @@ export default function Settings() {
                   <FileKey className="h-3.5 w-3.5" />
                   Private Key (JSON)
                 </Label>
-                <Textarea
-                  id="gcs-key"
-                  rows={6}
-                  placeholder={"-----BEGIN PRIVATE KEY-----\nMIIEv...\n-----END PRIVATE KEY-----\n"}
-                  value={gcsPrivateKey}
-                  onChange={e => setGcsPrivateKey(e.target.value)}
-                  spellCheck={false}
-                  autoComplete="off"
-                  className="font-mono text-xs"
-                />
+                <div className="flex items-start gap-2">
+                  <Textarea
+                    id="gcs-key"
+                    rows={6}
+                    placeholder={"-----BEGIN PRIVATE KEY-----\nMIIEv...\n-----END PRIVATE KEY-----\n"}
+                    value={gcsPrivateKey}
+                    onChange={e => setGcsPrivateKey(e.target.value)}
+                    spellCheck={false}
+                    autoComplete="off"
+                    className="w-full font-mono text-xs leading-5 whitespace-pre-wrap break-all overflow-x-hidden px-2"
+                  />
+                  <Button onClick={saveGcsPrivateKeyOnly} size="sm" disabled={saveMutation.isPending} className="shrink-0 mt-1">
+                    <Save className="h-4 w-4" />
+                    저장
+                  </Button>
+                </div>
                 <p className="text-[11px] text-muted-foreground">
                   서비스 계정 JSON의 <code>private_key</code> 값을 그대로 붙여넣으세요.
                   내부적으로 줄바꿈(\n)을 자동 변환합니다.
@@ -234,24 +385,6 @@ export default function Settings() {
               </div>
             </div>
 
-            <Button
-              onClick={onVerifyGcs}
-              size="lg"
-              className="w-full"
-              disabled={verifyGcs.isPending}
-            >
-              {verifyGcs.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  검증 중…
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="h-4 w-4" />
-                  저장 및 검증
-                </>
-              )}
-            </Button>
           </CardContent>
         </Card>
       </div>

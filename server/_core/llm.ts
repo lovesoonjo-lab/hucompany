@@ -57,6 +57,11 @@ export type ToolChoice =
 
 export type InvokeParams = {
   messages: Message[];
+  apiKey?: string;
+  apiBaseUrl?: string;
+  model?: string;
+  appName?: string;
+  siteUrl?: string;
   tools?: Tool[];
   toolChoice?: ToolChoice;
   tool_choice?: ToolChoice;
@@ -209,15 +214,19 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
-    ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
-    : "https://forge.manus.im/v1/chat/completions";
+const resolveApiUrl = (apiBaseUrl?: string) =>
+  apiBaseUrl && apiBaseUrl.trim().length > 0
+    ? `${apiBaseUrl.replace(/\/$/, "")}/chat/completions`
+    : ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
+      ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
+      : "https://forge.manus.im/v1/chat/completions";
 
-const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+const resolveApiKey = (apiKey?: string) => {
+  const resolved = (apiKey ?? ENV.forgeApiKey ?? "").trim();
+  if (!resolved) {
+    throw new Error("BUILT_IN_FORGE_API_KEY or OPENROUTER_API_KEY is not configured");
   }
+  return resolved;
 };
 
 const normalizeResponseFormat = ({
@@ -266,10 +275,14 @@ const normalizeResponseFormat = ({
 };
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+  const apiKey = resolveApiKey(params.apiKey);
 
   const {
     messages,
+    model,
+    apiBaseUrl,
+    appName,
+    siteUrl,
     tools,
     toolChoice,
     tool_choice,
@@ -280,7 +293,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const payload: Record<string, unknown> = {
-    model: "gemini-2.5-flash",
+    model: model ?? "gemini-2.5-flash",
     messages: messages.map(normalizeMessage),
   };
 
@@ -312,12 +325,16 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetch(resolveApiUrl(), {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    authorization: `Bearer ${apiKey}`,
+  };
+  if (appName) headers["x-title"] = appName;
+  if (siteUrl) headers["http-referer"] = siteUrl;
+
+  const response = await fetch(resolveApiUrl(apiBaseUrl), {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
-    },
+    headers,
     body: JSON.stringify(payload),
   });
 

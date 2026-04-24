@@ -22,6 +22,7 @@ const IMAGE_ENDPOINTS: Record<ImageModelId, string> = {
   "Flux": "/generate/image/bfl/flux-1-dev",
   "Flux Kontext": "/generate/image/bfl/flux-kontext",
   "Nano Banana Pro": "/generate/image/google/nano-banana-pro",
+  "Nano Banana 2": "/generate/image/google/nano-banana-2",
   "ChatGPT Image": "/generate/image/openai/chatgpt-image",
   "Seedream 4": "/generate/image/bytedance/seedream-4",
   "Imagen 4": "/generate/image/google/imagen-4",

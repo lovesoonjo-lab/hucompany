@@ -37,9 +37,9 @@ describe("shared/catalog", () => {
     expect(PIPELINE_STEPS.map(s => s.id)).toEqual([1, 2, 3, 4, 5]);
     expect(PIPELINE_STEPS.map(s => s.key)).toEqual([
       "script",
-      "prompt",
       "image",
       "video",
+      "subtitle",
       "upload",
     ]);
   });
