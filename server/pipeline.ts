@@ -224,14 +224,19 @@ export async function generateSceneImage(
   // 2) Fallback path: built-in image helper. Prefix the prompt with the
   //    selected model for provenance so the UI label matches the user's choice.
   const prompt = `[${input.model}] ${input.prompt}`;
-  const { url } = await generateImage({
-    prompt,
-    originalImages: input.referenceImages.length
-      ? input.referenceImages.map(r => ({ url: r.url, mimeType: r.mimeType || "image/png" }))
-      : undefined,
-  });
-  if (!url) throw new Error("Image generation returned empty URL");
-  return { url, provider: "builtin" };
+  try {
+    const { url } = await generateImage({
+      prompt,
+      originalImages: input.referenceImages.length
+        ? input.referenceImages.map(r => ({ url: r.url, mimeType: r.mimeType || "image/png" }))
+        : undefined,
+    });
+    if (!url) throw new Error("Image generation returned empty URL");
+    return { url, provider: "builtin" };
+  } catch (err) {
+    console.warn("[generateSceneImage] Built-in failed:", err);
+    throw new Error("이미지 생성 실패: Kie API 키 또는 내장 Forge 설정을 확인해 주세요.");
+  }
 }
 
 export interface UpscaleSceneImageInput {

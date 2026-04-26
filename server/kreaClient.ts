@@ -1,5 +1,5 @@
 /**
- * Krea API client.
+ * Kie/Krea API client.
  *
  * Implements the public Krea AI HTTP contract documented at
  * https://docs.krea.ai/api-reference. All endpoints follow the same async job
@@ -14,7 +14,11 @@
  */
 import type { ImageModelId, VideoModelId } from "@shared/catalog";
 
-const BASE_URL = "https://api.krea.ai";
+// Prefer Kie's current base URL. Keep legacy Krea URL as fallback for
+// backward compatibility or older keys/routes.
+const PRIMARY_BASE_URL =
+  process.env.KIE_API_BASE_URL?.trim() || "https://api.kie.ai";
+const FALLBACK_BASE_URL = "https://api.krea.ai";
 
 /** Mapping from our internal model ids to Krea API endpoint paths. */
 const IMAGE_ENDPOINTS: Record<ImageModelId, string> = {
@@ -68,28 +72,45 @@ export class KreaApiError extends Error {
   }
 }
 
-async function postJob(apiKey: string, path: string, body: unknown): Promise<string> {
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  if (!res.ok) throw new KreaApiError(res.status, text);
-  let parsed: JobResponse;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new KreaApiError(res.status, text, "Invalid JSON from Krea API");
+async function postJob(
+  apiKey: string,
+  path: string,
+  body: unknown
+): Promise<{ jobId: string; baseUrl: string }> {
+  const baseUrls = [PRIMARY_BASE_URL, FALLBACK_BASE_URL];
+  let lastErr: Error | null = null;
+
+  for (const baseUrl of baseUrls) {
+    try {
+      const res = await fetch(`${baseUrl}${path}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      const text = await res.text();
+      if (!res.ok) throw new KreaApiError(res.status, text);
+      let parsed: JobResponse;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        throw new KreaApiError(res.status, text, "Invalid JSON from Kie/Krea API");
+      }
+      return { jobId: parsed.job_id, baseUrl };
+    } catch (err) {
+      lastErr = err as Error;
+      // Try next base URL.
+    }
   }
-  return parsed.job_id;
+
+  throw lastErr ?? new Error("Unable to create generation job");
 }
 
 async function pollJob(
   apiKey: string,
+  baseUrl: string,
   jobId: string,
   opts: { intervalMs?: number; timeoutMs?: number } = {},
 ): Promise<string> {
@@ -100,7 +121,7 @@ async function pollJob(
   const maxIter = Math.ceil(timeoutMs / intervalMs) + 2;
   let i = 0;
   while (Date.now() < deadline && i++ < maxIter) {
-    const res = await fetch(`${BASE_URL}/jobs/${encodeURIComponent(jobId)}`, {
+    const res = await fetch(`${baseUrl}/jobs/${encodeURIComponent(jobId)}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
     const text = await res.text();
@@ -157,8 +178,11 @@ export async function kreaGenerateImage(p: GenerateImageParams): Promise<string>
   if (p.referenceImageUrls && p.referenceImageUrls.length > 0) {
     body.styleImages = p.referenceImageUrls.map((url) => ({ url }));
   }
-  const jobId = await postJob(p.apiKey, path, body);
-  return pollJob(p.apiKey, jobId, { intervalMs: p.pollInterval, timeoutMs: p.pollTimeout });
+  const { jobId, baseUrl } = await postJob(p.apiKey, path, body);
+  return pollJob(p.apiKey, baseUrl, jobId, {
+    intervalMs: p.pollInterval,
+    timeoutMs: p.pollTimeout,
+  });
 }
 
 export interface GenerateVideoParams {
@@ -183,8 +207,11 @@ export async function kreaGenerateVideo(p: GenerateVideoParams): Promise<string>
     aspectRatio: p.aspectRatio ?? "9:16",
     duration: Math.max(4, Math.min(12, p.duration ?? 8)),
   };
-  const jobId = await postJob(p.apiKey, path, body);
-  return pollJob(p.apiKey, jobId, { intervalMs: p.pollInterval, timeoutMs: p.pollTimeout });
+  const { jobId, baseUrl } = await postJob(p.apiKey, path, body);
+  return pollJob(p.apiKey, baseUrl, jobId, {
+    intervalMs: p.pollInterval,
+    timeoutMs: p.pollTimeout,
+  });
 }
 
 export interface UpscaleParams {
@@ -197,6 +224,9 @@ export interface UpscaleParams {
 /** Runs Topaz Generative upscale on an image. Returns the upscaled asset URL. */
 export async function kreaTopazUpscale(p: UpscaleParams): Promise<string> {
   const body = { imageUrl: p.imageUrl };
-  const jobId = await postJob(p.apiKey, TOPAZ_ENDPOINT, body);
-  return pollJob(p.apiKey, jobId, { intervalMs: p.pollInterval, timeoutMs: p.pollTimeout });
+  const { jobId, baseUrl } = await postJob(p.apiKey, TOPAZ_ENDPOINT, body);
+  return pollJob(p.apiKey, baseUrl, jobId, {
+    intervalMs: p.pollInterval,
+    timeoutMs: p.pollTimeout,
+  });
 }

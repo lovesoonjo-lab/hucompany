@@ -47,7 +47,7 @@ import {
   ChevronRight,
   Square,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { toast } from "sonner";
 
@@ -936,9 +936,37 @@ function ImageSceneCard({
   globalModel: ImageModelId;
   onAfterChange: () => void;
 }) {
+  const [imageGenProgress, setImageGenProgress] = useState(0);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearProgressTimer = () => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  };
+
+  const startProgress = () => {
+    clearProgressTimer();
+    setImageGenProgress(0);
+    progressTimerRef.current = setInterval(() => {
+      setImageGenProgress(prev => (prev >= 90 ? prev : prev + 5));
+    }, 250);
+  };
+
   const generateImageM = trpc.scenes.generateImage.useMutation({
-    onSuccess: () => { toast.success("이미지 생성 완료"); onAfterChange(); },
-    onError: e => toast.error(e.message),
+    onSuccess: () => {
+      clearProgressTimer();
+      setImageGenProgress(100);
+      toast.success("이미지 생성 완료");
+      onAfterChange();
+      setTimeout(() => setImageGenProgress(0), 500);
+    },
+    onError: e => {
+      clearProgressTimer();
+      setImageGenProgress(0);
+      toast.error(e.message);
+    },
   });
   const updatePromptM = trpc.scenes.updatePrompt.useMutation({
     onSuccess: () => { toast.success("프롬프트 저장"); onAfterChange(); },
@@ -957,6 +985,8 @@ function ImageSceneCard({
   useEffect(() => {
     setPrompt(parsed.imagePrompt || stripVideoActionLines(scene.imagePrompt ?? ""));
   }, [parsed.imagePrompt, scene.imagePrompt]);
+
+  useEffect(() => () => clearProgressTimer(), []);
 
   return (
     <Card className="border hairline">
@@ -985,7 +1015,7 @@ function ImageSceneCard({
           ) : (
             <div className="text-muted-foreground text-sm flex flex-col items-center gap-2">
               <ImageIcon className="h-5 w-5" />
-              <span>미리보기 이미지가 아직 없습니다</span>
+              <span className="text-center">미리보기 이미지가<br />아직 없습니다</span>
             </div>
           )}
         </div>
@@ -1025,7 +1055,10 @@ function ImageSceneCard({
           <Button
             size="sm"
             className="flex-1"
-            onClick={() => generateImageM.mutate({ sceneId: scene.id, model: globalModel })}
+            onClick={() => {
+              startProgress();
+              generateImageM.mutate({ sceneId: scene.id, model: globalModel });
+            }}
             disabled={!scene.imagePrompt || generateImageM.isPending}
           >
             {generateImageM.isPending ? (
@@ -1037,6 +1070,9 @@ function ImageSceneCard({
             )}
             {scene.imageUrl ? "재생성" : "이미지 생성"}
           </Button>
+          {generateImageM.isPending || imageGenProgress > 0 ? (
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">{imageGenProgress}%</span>
+          ) : null}
           <span className="text-[10px] text-muted-foreground whitespace-nowrap">
             {projectAspect}
           </span>
@@ -1118,9 +1154,7 @@ function VideoSceneCard({
             <div className="relative w-full h-full">
               <img src={scene.imageUrl} alt="" className="w-full h-full object-cover opacity-60" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-xs text-white/80 bg-black/50 px-3 py-1.5 rounded">
-                  미리보기 이미지가 아직 없습니다
-                </span>
+                <span className="text-xs text-white/80 bg-black/50 px-3 py-1.5 rounded text-center">미리보기 이미지가<br />아직 없습니다</span>
               </div>
             </div>
           ) : (
