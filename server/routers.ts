@@ -1,4 +1,5 @@
-﻿import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME } from "@shared/const";
+import { parseSceneFields, stripVideoActionLines } from "@shared/scriptSceneParse";
 import { TRPCError } from "@trpc/server";
 import sharp from "sharp";
 import { z } from "zod";
@@ -717,6 +718,8 @@ export const appRouter = router({
           sceneId: z.number().int().positive(),
           model: videoModelSchema,
           durationSec: z.number().int().min(5).max(12),
+          /** Motion prompt from script (Video Action). Server merges with image prompt. */
+          videoAction: z.string().max(8000).optional(),
         }),
       )
       .mutation(async ({ ctx, input }) => {
@@ -737,11 +740,24 @@ export const appRouter = router({
           const vSettings = await getUserSettings(ctx.user.id);
           const project = await getProject(ctx.user.id, scene.projectId);
           const aspect = (project?.aspectRatio === "16:9" ? "16:9" : "9:16") as "9:16" | "16:9";
+          const script = project?.script ?? "";
+          const motion =
+            (input.videoAction?.trim() ||
+              parseSceneFields(script, scene.sceneIndex).videoAction.trim()) ||
+            "";
+          const imagePart = stripVideoActionLines(scene.imagePrompt ?? "").trim() || (scene.imagePrompt ?? "").trim();
+          const promptForVideo =
+            motion && imagePart
+              ? `${imagePart}\n\nVideo Action: ${motion}`
+              : motion
+                ? `Video Action: ${motion}`
+                : scene.imagePrompt ?? undefined;
+
           const { url } = await generateSceneVideo({
             imageUrl: scene.imageUrl,
             model: input.model,
             durationSec: input.durationSec,
-            prompt: scene.imagePrompt ?? undefined,
+            prompt: promptForVideo,
             aspectRatio: aspect,
             kreaApiKey: vSettings?.kreaApiKey || undefined,
           });

@@ -36,6 +36,13 @@ export default function Home() {
     retry: false,
     refetchOnWindowFocus: false,
   });
+  const updateMutation = trpc.projects.update.useMutation({
+    onSuccess: () => {
+      toast.success("프로젝트 이름이 수정되었습니다");
+      utils.projects.list.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
   const removeMutation = trpc.projects.remove.useMutation({
     onSuccess: () => {
       toast.success("프로젝트가 삭제되었습니다");
@@ -90,7 +97,7 @@ export default function Home() {
           <div className="grid grid-cols-5 gap-3">
             {PIPELINE_STEPS.map(step => (
               <Card key={step.id} className="border hairline shadow-none">
-                <CardContent className="px-4 py-2.5 min-h-[74px] flex items-center justify-start">
+                <CardContent className="px-4 py-2.5 min-h-[68px] flex items-center justify-start">
                   <div className="flex w-full items-center gap-3 justify-start">
                     <div className="h-7 w-7 shrink-0 rounded-full bg-secondary flex items-center justify-center font-serif text-xs">
                       {step.id}
@@ -114,8 +121,8 @@ export default function Home() {
         <section className="space-y-5">
           <div className="flex items-end justify-between">
             <div>
-              <p className="uppercase tracking-[0.28em] text-[11px] text-muted-foreground">Library</p>
-              <h2 className="font-serif text-2xl md:text-3xl mt-1">최근 프로젝트</h2>
+              <p className="uppercase tracking-[0.28em] text-[11px] text-muted-foreground">HUCOMPANY</p>
+              <h2 className="font-serif text-2xl md:text-3xl mt-3">최근 프로젝트</h2>
             </div>
             <Button variant="ghost" onClick={() => setLocation("/projects")}>
               전체 보기 <ArrowRight className="h-4 w-4" />
@@ -156,63 +163,86 @@ export default function Home() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 justify-items-start">
               {projects.slice(0, 6).map(p => (
-                <div key={p.id} className="relative group w-full max-w-[320px]">
-                  <div className="absolute top-2 right-2 z-10">
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-6 px-2 text-[10px] leading-none text-muted-foreground hover:text-destructive"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          삭제
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>프로젝트를 삭제할까요?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            삭제하면 장면, 자산, 업로드 기록을 모두 잃게 됩니다. 이 작업은 되돌릴 수 없습니다.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>취소</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => removeMutation.mutate({ projectId: p.id })}
-                            className="bg-destructive text-white hover:bg-destructive/90"
-                          >
-                            삭제
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+                <div key={p.id} className="group w-full max-w-[220px]">
                   <Card className="border hairline transition-all group-hover:shadow-md group-hover:border-accent/50">
-                    <CardContent className="px-4 py-2.5 min-h-[74px] space-y-2">
-                      <div className="flex items-start justify-between gap-2 pr-14">
-                        <Badge variant="secondary" className="font-mono text-[10px]">
+                    <CardContent className="px-4 py-0 min-h-0 flex flex-col h-[68px]">
+                      <div className="flex items-start justify-between gap-2 relative">
+                        <Badge variant="secondary" className="font-mono text-[10px] -mt-2.5">
                           {p.aspectRatio}
                         </Badge>
-                        <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                          {STATUS_LABEL[p.status] ?? p.status}
-                        </span>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground -mt-2.5">
+                            {STATUS_LABEL[p.status] ?? p.status}
+                          </span>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setLocation(`/projects/${p.id}`)}
-                        className="text-left w-full"
-                      >
-                        <p className="font-serif text-base leading-tight line-clamp-1 hover:underline">{p.title}</p>
-                      </button>
-                      <p className="text-xs text-muted-foreground line-clamp-1">
-                        {p.description || "설명 없음"}
-                      </p>
-                      <div className="gold-divider w-12 opacity-50" />
-                      <p className="text-[10px] text-muted-foreground">
-                        {new Date(p.updatedAt).toLocaleString()}
-                      </p>
+                      <div className="flex items-center justify-between gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setLocation(`/projects/${p.id}`)}
+                          className="text-left flex-1 min-w-0"
+                        >
+                          <p className="font-serif text-[14px] leading-none line-clamp-1 hover:underline">{p.title}</p>
+                        </button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 px-1.5 text-[10px] shrink-0"
+                          onClick={() => {
+                            const nextTitle = window.prompt("기존 프로젝트 이름을 수정하세요", p.title)?.trim();
+                            if (!nextTitle || nextTitle === p.title) return;
+                            updateMutation.mutate({ projectId: p.id, title: nextTitle });
+                          }}
+                        >
+                          수정
+                        </Button>
+                      </div>
+                      <div className="flex-1" />
+                      <div className="flex items-center justify-between gap-2 pb-1.5 translate-y-[20px]">
+                        <p className="text-[8px] leading-none text-muted-foreground">
+                          {new Date(p.updatedAt).toLocaleString()}
+                        </p>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-5 px-1.5 text-[9px] leading-none"
+                            onClick={() => setLocation(`/projects/${p.id}`)}
+                          >
+                            열기
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-5 px-1.5 text-[9px] leading-none text-muted-foreground hover:text-destructive"
+                              >
+                                삭제
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>프로젝트를 삭제할까요?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  삭제하면 장면, 자산, 업로드 기록을 모두 잃게 됩니다. 이 작업은 되돌릴 수 없습니다.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>취소</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => removeMutation.mutate({ projectId: p.id })}
+                                  className="bg-destructive text-white hover:bg-destructive/90"
+                                >
+                                  삭제
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 </div>

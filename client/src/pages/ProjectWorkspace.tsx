@@ -1,4 +1,4 @@
-import DashboardLayout from "@/components/DashboardLayout";
+﻿import DashboardLayout from "@/components/DashboardLayout";
 import { PipelineStepper, PipelineStage } from "@/components/PipelineStepper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
   type ImageModelId,
   type VideoModelId,
 } from "@shared/catalog";
+import { parseSceneFields, stripVideoActionLines } from "@shared/scriptSceneParse";
 import {
   ArrowLeft,
   Image as ImageIcon,
@@ -90,6 +91,19 @@ const SUBTITLE_FONT_OPTIONS = [
   { label: "Gowun Dodum", value: "Gowun Dodum" },
 ];
 
+const SUBTITLE_FONT_STACKS: Record<string, string> = {
+  Pretendard: "Pretendard, sans-serif",
+  "Noto Sans KR": '"Noto Sans KR", sans-serif',
+  "Nanum Gothic": '"Nanum Gothic", sans-serif',
+  "Nanum Myeongjo": '"Nanum Myeongjo", serif',
+  "Black Han Sans": '"Black Han Sans", sans-serif',
+  "Do Hyeon": '"Do Hyeon", sans-serif',
+  Jua: '"Jua", sans-serif',
+  "Gothic A1": '"Gothic A1", sans-serif',
+  "IBM Plex Sans KR": '"IBM Plex Sans KR", sans-serif',
+  "Gowun Dodum": '"Gowun Dodum", sans-serif',
+};
+
 const SUBTITLE_SIZE_OPTIONS = [32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 90, 100, 110, 120, 130, 140];
 
 const SUBTITLE_LINE_OPTIONS = [
@@ -141,77 +155,6 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-}
-
-/* -------------------------------------------------------------------------- */
-/* Unified scene field parser                                                 */
-/* -------------------------------------------------------------------------- */
-
-interface ParsedSceneFields {
-  audio: string;
-  subtitle: string;
-  imagePrompt: string;
-  videoAction: string;
-}
-
-function splitSceneBlocks(script: string): { index: number; text: string }[] {
-  if (!script) return [];
-  // Normalize line endings
-  const lines = script.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
-
-  const blocks: { index: number; lines: string[] }[] = [];
-  let current: { index: number; lines: string[] } | null = null;
-
-  for (const line of lines) {
-    // Scene header: any line containing "Scene N" or "장면 N" (with optional leading emoji/symbols)
-    const headerMatch = line.match(/(?:scene|장면)\s*(\d+)/i);
-    if (headerMatch) {
-      if (current) blocks.push(current);
-      current = { index: parseInt(headerMatch[1]), lines: [line] };
-    } else if (current) {
-      current.lines.push(line);
-    }
-  }
-  if (current) blocks.push(current);
-
-  return blocks.map(b => ({ index: b.index, text: b.lines.join("\n") }));
-}
-
-function parseSceneFields(script: string, sceneIndex: number): ParsedSceneFields {
-  const empty: ParsedSceneFields = { audio: "", subtitle: "", imagePrompt: "", videoAction: "" };
-  if (!script) return empty;
-
-  const blocks = splitSceneBlocks(script);
-  const block = blocks.find(b => b.index === sceneIndex);
-  if (!block) return empty;
-
-  // Search each line for a labeled field, return value after the colon
-  const getField = (keyPattern: RegExp): string => {
-    for (const line of block.text.split("\n")) {
-      const m = line.match(keyPattern);
-      if (m) {
-        // m[1] is the value after the colon
-        return m[1].replace(/^[\s"'""\u201c\u201d]+|[\s"'""\u201c\u201d]+$/g, "").trim();
-      }
-    }
-    return "";
-  };
-
-  return {
-    audio:       getField(/오디오\s*[:：]\s*(.+)$/i),
-    subtitle:    getField(/자막\s*[:：]\s*(.+)$/i),
-    imagePrompt: getField(/[Ii]mage\s*[Pp]rompt\s*[:：]\s*(.+)$/i),
-    videoAction: getField(/[Vv]ideo\s*[Aa]ction\s*[:：]\s*(.+)$/i),
-  };
-}
-
-function stripVideoActionLines(text: string): string {
-  if (!text) return "";
-  return text
-    .split("\n")
-    .filter(line => !/[Vv]ideo\s*[Aa]ction\s*[:：]/i.test(line))
-    .join("\n")
-    .trim();
 }
 
 function getSubtitlePositionStyle(positionPct: string): React.CSSProperties {
@@ -273,11 +216,20 @@ export default function ProjectWorkspace() {
     subtitleBgRgb === null
       ? "transparent"
       : `rgba(${subtitleBgRgb},${subtitleBgOpacity / 100})`;
+  const subtitleFontFamily =
+    SUBTITLE_FONT_STACKS[subtitleFont] ?? `"${subtitleFont}", "Noto Sans KR", "Pretendard", sans-serif`;
 
   useMemo(() => {
     if (project?.script && !script) setScript(project.script);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.id]);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !subtitleFontFamily) return;
+
+    // Ensure selected webfont is loaded before rendering preview text.
+    void (document as Document & { fonts?: FontFaceSet }).fonts?.load(`16px ${subtitleFontFamily}`);
+  }, [subtitleFontFamily]);
 
   const refresh = () => utils.projects.get.invalidate({ projectId });
 
@@ -362,7 +314,7 @@ export default function ProjectWorkspace() {
 
   const getSubtitleText = (scene: SceneRow) =>
     subtitleDraftByScene[scene.id] ||
-    parseSceneFields(project?.script ?? "", scene.sceneIndex).subtitle ||
+    parseSceneFields(script || project?.script || "", scene.sceneIndex).subtitle ||
     scene.scriptExcerpt ||
     "";
 
@@ -574,13 +526,13 @@ export default function ProjectWorkspace() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {scenes.map(s => (
                   <ImageSceneCard
                     key={s.id}
                     scene={s}
                     projectAspect={project.aspectRatio}
-                    projectScript={project.script ?? ""}
+                    projectScript={script || project.script || ""}
                     globalModel={globalImageModel}
                     onAfterChange={refresh}
                   />
@@ -621,12 +573,12 @@ export default function ProjectWorkspace() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {scenes.map(s => (
                   <VideoSceneCard
                     key={s.id}
                     scene={s}
-                    projectScript={project.script ?? ""}
+                    projectScript={script || project.script || ""}
                     globalModel={globalVideoModel}
                     onAfterChange={refresh}
                   />
@@ -644,7 +596,7 @@ export default function ProjectWorkspace() {
                 <CardContent className="py-5">
                   <p className="text-sm font-semibold text-foreground mb-3">미리보기</p>
                   <div className="shrink-0 flex flex-col gap-2">
-                    <div className="relative bg-black rounded-lg overflow-hidden border hairline w-[260px] h-[462px] mx-auto">
+                    <div className="relative bg-white rounded-lg overflow-hidden border hairline w-[260px] h-[462px] mx-auto">
                       {previewScene?.imageUrl ? (
                         <img src={previewScene.imageUrl} alt="" className="w-full h-full object-cover opacity-70" />
                       ) : (
@@ -657,11 +609,17 @@ export default function ProjectWorkspace() {
                         style={{
                           ...getSubtitlePositionStyle(subtitlePosition),
                           position: "absolute",
-                          fontFamily: subtitleFont,
+                          fontFamily: subtitleFontFamily,
                           fontSize: `${Math.round(subtitleSize * 0.28)}px`,
                           color: subtitleTextColor,
                           backgroundColor: subtitleBgCss,
                           lineHeight: 1.4,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          display: "-webkit-box",
+                          WebkitBoxOrient: "vertical",
+                          WebkitLineClamp: subtitleLineCount,
+                          overflow: "hidden",
                           maxWidth: "90%",
                         }}
                       >
@@ -698,7 +656,7 @@ export default function ProjectWorkspace() {
                           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {SUBTITLE_FONT_OPTIONS.map(f => (
-                              <SelectItem key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+                              <SelectItem key={f.value} value={f.value} style={{ fontFamily: `"${f.value}", "Noto Sans KR", "Pretendard", sans-serif` }}>
                                 {f.label}
                               </SelectItem>
                             ))}
@@ -717,6 +675,7 @@ export default function ProjectWorkspace() {
                         </Select>
                       </div>
                     </div>
+
 
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
@@ -743,14 +702,9 @@ export default function ProjectWorkspace() {
                       </div>
                     </div>
 
-                    {/* 글자색 + 배경색 한 줄 */}
+                    {/* 글자색 (한 줄) */}
                     <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs text-muted-foreground">글자색 / 배경색</Label>
-                        {subtitleBgRgb !== null && (
-                          <span className="text-[11px] text-muted-foreground">{subtitleBgOpacity}%</span>
-                        )}
-                      </div>
+                      <Label className="text-xs text-muted-foreground">글자색</Label>
                       <div className="flex flex-wrap items-center gap-2">
                         {TEXT_COLOR_OPTIONS.map(c => (
                           <button
@@ -764,7 +718,18 @@ export default function ProjectWorkspace() {
                             style={{ backgroundColor: c.value }}
                           />
                         ))}
-                        <div className="h-5 w-px bg-border/40 mx-1" />
+                      </div>
+                    </div>
+
+                    {/* 배경색 (한 줄) */}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        <Label className="text-xs text-muted-foreground">배경색</Label>
+                        {subtitleBgRgb !== null && (
+                          <span className="text-[11px] text-muted-foreground border border-border/50 rounded px-1">{subtitleBgOpacity}%</span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
                         {BG_COLOR_PRESETS.map(p => {
                           const isActive = p.rgb === null ? subtitleBgRgb === null : subtitleBgRgb === p.rgb;
                           return (
@@ -788,22 +753,13 @@ export default function ProjectWorkspace() {
                           max={100}
                           value={subtitleBgOpacity}
                           onChange={e => setSubtitleBgOpacity(Number(e.target.value))}
-                          className="w-full h-1.5 accent-primary mt-1"
+                          className="w-1/2 h-1.5 accent-primary mt-1"
                         />
                       )}
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            </div>
-
-            {/* 전체 씬 자막 자동 분류 */}
-            <div className="flex items-center gap-3 rounded-lg border hairline px-4 py-3 bg-muted/20">
-              <span className="text-base">✨</span>
-              <Button variant="outline" size="sm" className="shrink-0 text-xs">전체 씬 자막 자동 분류</Button>
-              <p className="text-xs text-muted-foreground">
-                스크립트의 내러이브에 맞게 문장 단위로 자막/TTS 텍스트를 자동 분류합니다.
-              </p>
             </div>
 
             {/* 장면별 오디오/자막 생성 */}
@@ -852,7 +808,7 @@ export default function ProjectWorkspace() {
             {/* Subtitle Editor */}
             {subtitleEditorSceneId !== null && scenes[subtitleEditorIdx] && (
               <Card className="border hairline mt-2">
-                <CardContent className="py-5 space-y-4">
+                <CardContent className="py-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Button
@@ -886,7 +842,7 @@ export default function ProjectWorkspace() {
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* Preview */}
-                    <div className="relative w-full aspect-[9/16] bg-black rounded-lg overflow-hidden border hairline max-w-[200px]">
+                    <div className="relative w-full aspect-[9/16] bg-white rounded-lg overflow-hidden border hairline max-w-[200px]">
                       {scenes[subtitleEditorIdx].imageUrl ? (
                         <img
                           src={scenes[subtitleEditorIdx].imageUrl!}
@@ -903,11 +859,17 @@ export default function ProjectWorkspace() {
                         style={{
                           ...getSubtitlePositionStyle(subtitlePosition),
                           position: "absolute",
-                          fontFamily: subtitleFont,
+                          fontFamily: subtitleFontFamily,
                           fontSize: Math.max(subtitleSize * 0.6, 10),
                           color: subtitleTextColor,
                           backgroundColor: subtitleBgCss,
                           lineHeight: 1.4,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          display: "-webkit-box",
+                          WebkitBoxOrient: "vertical",
+                          WebkitLineClamp: subtitleLineCount,
+                          overflow: "hidden",
                         }}
                       >
                         {getSubtitleText(scenes[subtitleEditorIdx]) || "자막"}
@@ -918,10 +880,10 @@ export default function ProjectWorkspace() {
                     <div className="space-y-2">
                       <Label className="text-xs text-muted-foreground">자막 텍스트</Label>
                       <Textarea
-                        rows={6}
+                        rows={5}
                         value={
                           subtitleDraftByScene[scenes[subtitleEditorIdx].id] ||
-                          parseSceneFields(project.script ?? "", scenes[subtitleEditorIdx].sceneIndex).subtitle ||
+                          parseSceneFields(script || project.script || "", scenes[subtitleEditorIdx].sceneIndex).subtitle ||
                           scenes[subtitleEditorIdx].scriptExcerpt ||
                           ""
                         }
@@ -933,7 +895,7 @@ export default function ProjectWorkspace() {
                         }
                         placeholder="자막 텍스트를 입력하세요"
                         className="resize-none"
-                        style={{ fontFamily: subtitleFont }}
+                        style={{ fontFamily: subtitleFontFamily }}
                       />
                     </div>
                   </div>
@@ -998,20 +960,22 @@ function ImageSceneCard({
 
   return (
     <Card className="border hairline">
-      <CardContent className="py-5 space-y-4">
+      <CardContent className="py-4 space-y-3">
         <header className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
               Scene {scene.sceneIndex}
             </p>
-            <p className="font-serif text-lg leading-tight mt-0.5 line-clamp-2">
-              {scene.scriptExcerpt || "(빈 장면)"}
-            </p>
+            <div className="mt-1 rounded-md border hairline bg-muted/20 px-2 py-1">
+              <p className="font-serif text-sm leading-snug line-clamp-2">
+                {scene.scriptExcerpt || "(빈 장면)"}
+              </p>
+            </div>
           </div>
         </header>
 
         {/* Preview */}
-        <div className="rounded-md border hairline overflow-hidden bg-black/80 aspect-[9/16] max-w-[220px] mx-auto flex items-center justify-center">
+        <div className="rounded-md border hairline overflow-hidden bg-white aspect-[9/16] max-w-[180px] mx-auto flex items-center justify-center">
           {scene.imageStatus === "generating" ? (
             <div className="text-muted-foreground text-sm flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" /> 이미지 생성 중…
@@ -1048,11 +1012,11 @@ function ImageSceneCard({
             </Button>
           </div>
           <Textarea
-            rows={6}
+            rows={5}
             value={prompt}
             onChange={e => setPrompt(stripVideoActionLines(e.target.value))}
             placeholder="이미지 프롬프트가 여기에 표시됩니다."
-            className="font-mono text-xs h-40 resize-none whitespace-pre-wrap break-all overflow-y-scroll"
+            className="font-mono text-xs h-32 resize-none whitespace-pre-wrap break-all overflow-y-scroll"
           />
         </div>
 
@@ -1113,20 +1077,22 @@ function VideoSceneCard({
 
   return (
     <Card className="border hairline">
-      <CardContent className="py-5 space-y-4">
+      <CardContent className="py-4 space-y-3">
         <header className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
               Scene {scene.sceneIndex}
             </p>
-            <p className="font-serif text-lg leading-tight mt-0.5 line-clamp-2">
-              {scene.scriptExcerpt || "(빈 장면)"}
-            </p>
+            <div className="mt-1 rounded-md border hairline bg-muted/20 px-2 py-1">
+              <p className="font-serif text-sm leading-snug line-clamp-2">
+                {scene.scriptExcerpt || "(빈 장면)"}
+              </p>
+            </div>
           </div>
         </header>
 
         {/* Preview */}
-        <div className="rounded-md border hairline overflow-hidden bg-black/80 aspect-[9/16] max-w-[220px] mx-auto flex items-center justify-center">
+        <div className="rounded-md border hairline overflow-hidden bg-white aspect-[9/16] max-w-[180px] mx-auto flex items-center justify-center">
           {scene.videoStatus === "generating" ? (
             <div className="text-muted-foreground text-sm flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" /> 영상 생성 중…
@@ -1171,7 +1137,7 @@ function VideoSceneCard({
             Video Action
           </Label>
           <Textarea
-            rows={3}
+            rows={2}
             value={videoAction}
             readOnly
             placeholder="대본에서 Video Action 내용이 표시됩니다."
@@ -1186,7 +1152,12 @@ function VideoSceneCard({
             className="flex-1"
             disabled={!scene.imageUrl || generateVideoM.isPending}
             onClick={() =>
-              generateVideoM.mutate({ sceneId: scene.id, model: globalModel, durationSec: duration })
+              generateVideoM.mutate({
+                sceneId: scene.id,
+                model: globalModel,
+                durationSec: duration,
+                videoAction: videoAction.trim() || undefined,
+              })
             }
           >
             {generateVideoM.isPending ? (
@@ -1302,7 +1273,7 @@ function UploadPanel({
 
           <div className="space-y-2">
             <Label htmlFor="caption">캡션</Label>
-            <Textarea id="caption" rows={3} value={caption} onChange={e => setCaption(e.target.value)} />
+            <Textarea id="caption" rows={2} value={caption} onChange={e => setCaption(e.target.value)} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="hashtags">해시태그</Label>
@@ -1397,3 +1368,9 @@ function StatusBadge({ status }: { status: "pending" | "uploading" | "success" |
     </span>
   );
 }
+
+
+
+
+
+
